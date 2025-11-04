@@ -1,0 +1,246 @@
+<<< FILE: ./biome.json >>>
+{
+	"root": true,
+	"$schema": "https://biomejs.dev/schemas/2.3.2/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": false
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double"
+		}
+	},
+	"assist": {
+		"enabled": true,
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	}
+}
+
+
+<<< FILE: ./codebase.txt >>>
+
+
+<<< FILE: ./env.secretized >>>
+ZXhwb3J0IGNvbnN0IERBVEFCQVNFX1VSSTogc3RyaW5nID0gInRoaXMgaXMgYWVzIGVuY3J5cHRlZCI=
+
+<<< FILE: ./env.ts >>>
+import "data:module-typescript;base64,ZXhwb3J0IGNvbnN0IHNlY3JldCA9ICIxMjMiOw==";
+
+
+<<< FILE: ./package.json >>>
+{
+	"name": "secretize",
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"lint-fix": "biome check --write"
+	},
+	"keywords": [],
+	"author": "Krystian Mikołajczyk",
+	"packageManager": "pnpm@10.20.0+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd",
+	"devDependencies": {
+		"@biomejs/biome": "2.3.2",
+		"typescript": "^5.9.3",
+		"@types/node": "^24.10.0"
+	}
+}
+
+
+<<< FILE: ./pnpm-workspace.yaml >>>
+packages:
+  - packages/*
+  - sdk/*
+
+<<< FILE: ./scripts.ts >>>
+import secrets from "./secret-loader.ts"; // must run first
+
+console.log(secrets)
+
+
+<<< FILE: ./sdk\typescript\index.ts >>>
+
+
+<<< FILE: ./secret-loader.ts >>>
+import fs from "node:fs";
+import { registerHooks } from "node:module";
+
+registerHooks({
+	load(url, context, nextLoad) {
+		if (url.endsWith(".secretized")) {
+			const encoded = fs.readFileSync(new URL(url), "utf8");
+			const decoded = Buffer.from(encoded, "base64").toString("utf8");
+
+			return {
+				format: "module-typescript",
+				shortCircuit: true,
+				source: decoded,
+			};
+		}
+		return nextLoad(url, context);
+	},
+});
+
+const secrets = await import("./env.secretized");
+
+export default { ...secrets };
+
+
+<<< FILE: ./tsconfig.json >>>
+{
+	"compilerOptions": {
+		"skipLibCheck": true,
+		"noEmit": true,
+		"strict": true,
+		"plugins": [{ "name": "./tsplugin-secretized" }],
+		"module": "nodenext",
+		"allowImportingTsExtensions": true,
+		"erasableSyntaxOnly": true,
+		"baseUrl": ".",
+		"paths": {
+			"@env.secretized": ["./secretized-runtime-shim.ts"]
+		}
+	},
+	"exclude": ["node_modules"],
+	"include": ["scripts.ts", "env.secretized"]
+}
+
+
+<<< FILE: ./tsplugin-secretized\dist\index.js >>>
+"use strict";
+const node_fs_1 = require("node:fs");
+const node_path_1 = require("node:path");
+function init(modules) {
+    const ts = modules.typescript;
+    // ✅ log both to stdout and to a file so we can see it no matter what
+    console.log("🧩 Secretized TS plugin initialized");
+    try {
+        node_fs_1.default.appendFileSync(node_path_1.default.resolve(process.cwd(), "secretized-plugin.log"), `[${new Date().toISOString()}] Plugin initialized\n`);
+    }
+    catch { }
+    function create(info) {
+        console.log("🧩 Secretized TS plugin: create() called for project", info.project.getCurrentDirectory());
+        node_fs_1.default.appendFileSync(node_path_1.default.resolve(process.cwd(), "secretized-plugin.log"), `[${new Date().toISOString()}] create() called\n`);
+        return info.languageService;
+    }
+    return { create };
+}
+module.exports = init;
+
+
+<<< FILE: ./tsplugin-secretized\index.ts >>>
+import fs from "node:fs";
+import path from "node:path";
+
+function init(modules: { typescript: typeof import("typescript/lib/tsserverlibrary") }) {
+  const ts = modules.typescript;
+
+  // ✅ log both to stdout and to a file so we can see it no matter what
+  console.log("🧩 Secretized TS plugin initialized");
+  try {
+    fs.appendFileSync(
+      path.resolve(process.cwd(), "secretized-plugin.log"),
+      `[${new Date().toISOString()}] Plugin initialized\n`
+    );
+  } catch {}
+
+  function create(info: ts.server.PluginCreateInfo): ts.LanguageService {
+    console.log("🧩 Secretized TS plugin: create() called for project", info.project.getCurrentDirectory());
+    fs.appendFileSync(
+      path.resolve(process.cwd(), "secretized-plugin.log"),
+      `[${new Date().toISOString()}] create() called\n`
+    );
+    return info.languageService;
+  }
+
+  return { create };
+}
+
+export = init;
+
+
+<<< FILE: ./tsplugin-secretized\package.json >>>
+{
+	"name": "tsplugin-secretized",
+    "type": "commonjs"
+}
+
+
+<<< FILE: ./tsplugin-secretized\transformer.ts >>>
+import * as ts from "typescript";
+
+console.log('LOADED')
+
+export function secretizedTransformer(): ts.TransformerFactory<ts.SourceFile> {
+	return (context) => {
+		const visit: ts.Visitor = (node) => {
+			if (
+				ts.isImportDeclaration(node) &&
+				ts.isStringLiteral(node.moduleSpecifier) &&
+				node.moduleSpecifier.text.endsWith(".secretized")
+			) {
+				// convert:
+				// import x from "./env.secretized"
+				// ⟶ const x = await import("./env.secretized")
+				const name =
+					node.importClause?.name ?? ts.factory.createIdentifier("secrets");
+				const importCall = ts.factory.createAwaitExpression(
+					ts.factory.createCallExpression(
+						ts.factory.createIdentifier("import"),
+						undefined,
+						[ts.factory.createStringLiteral(node.moduleSpecifier.text)],
+					),
+				);
+
+				return ts.factory.createVariableStatement(
+					undefined,
+					ts.factory.createVariableDeclarationList(
+						[
+							ts.factory.createVariableDeclaration(
+								name,
+								undefined,
+								undefined,
+								importCall,
+							),
+						],
+						ts.NodeFlags.Const,
+					),
+				);
+			}
+			return ts.visitEachChild(node, visit, context);
+		};
+
+		return (file) => ts.visitNode(file, visit);
+	};
+}
+
+
+<<< FILE: ./tsplugin-secretized\tsconfig.json >>>
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "outDir": "./dist",
+    "skipLibCheck": true
+  },
+  "include": ["index.ts"]
+}
+

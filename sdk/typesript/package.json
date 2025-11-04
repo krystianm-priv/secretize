@@ -1,0 +1,12 @@
+{
+	"name": "@secretized/sdk-typescript",
+	"version": "1.0.0",
+	"main": "index.ts",
+	"type": "module",
+	"devDependencies": {
+		"@secretize/coders": "workspace:*",
+    "@types/node": "^24"
+	},
+	"scripts": {},
+	"packageManager": "pnpm@10.20.0"
+}
